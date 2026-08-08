@@ -2,13 +2,14 @@
 
 import { navLinks } from '@/lib/content/nav';
 import { useEnquiryModal } from '@/components/EnquiryModalProvider';
+import { Container } from '@/components/ui/Container';
 
 export default function Navbar() {
   const { open } = useEnquiryModal();
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/95 backdrop-blur">
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+      <Container className="flex items-center justify-between py-4">
         <a href="#home" className="text-xl font-extrabold text-brand-600">
           Ascentra
         </a>
@@ -28,7 +29,7 @@ export default function Navbar() {
         >
           Enquire Now
         </button>
-      </nav>
+      </Container>
     </header>
   );
 }

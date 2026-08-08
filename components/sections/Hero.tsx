@@ -2,13 +2,16 @@
 
 import { hero } from '@/lib/content/hero';
 import { useEnquiryModal } from '@/components/EnquiryModalProvider';
+import { Container } from '@/components/ui/Container';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 
 export default function Hero() {
   const { open } = useEnquiryModal();
 
   return (
     <section id="home" className="relative overflow-hidden bg-brand-50">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-20 md:grid-cols-2 md:items-center">
+      <Container className="grid gap-10 py-20 md:grid-cols-2 md:items-center">
         <div>
           <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-brand-600">
             {hero.eyebrow}
@@ -17,23 +20,14 @@ export default function Hero() {
             {hero.headlineLead} <span className="text-brand-600">{hero.headlineHighlight}</span>
           </h1>
           <p className="mt-4 max-w-lg text-lg text-slate-600">{hero.subheadline}</p>
-          <ul className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-wrap gap-3">
             {hero.highlights.map((item) => (
-              <li
-                key={item}
-                className="rounded-full border border-brand-200 bg-white px-3 py-1 text-sm font-medium text-brand-700"
-              >
-                {item}
-              </li>
+              <Badge key={item} label={item} />
             ))}
-          </ul>
-          <button
-            type="button"
-            onClick={open}
-            className="mt-8 rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700"
-          >
+          </div>
+          <Button onClick={open} className="mt-8">
             Enquire Now
-          </button>
+          </Button>
         </div>
         <div className="relative mx-auto aspect-square w-full max-w-sm">
           <div className="absolute inset-4 rounded-full bg-brand-100" />
@@ -42,7 +36,7 @@ export default function Hero() {
             A
           </div>
         </div>
-      </div>
+      </Container>
     </section>
   );
 }

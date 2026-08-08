@@ -32,6 +32,8 @@ npm run build    # production build
 ## Project structure
 
 - `app/` — Next.js App Router pages and the `/api/enquire` route handler
+- `components/ui/` — shared presentational primitives (`Container`, `SectionHeading`, `Card`,
+  `Badge`, `Button`, `IconCircle`) reused across section components instead of duplicating markup
 - `components/sections/` — one presentational component per landing-page section
 - `components/Enquiry*.tsx` — the lead-capture modal and its shared context
 - `lib/content/` — typed copy/data for each section

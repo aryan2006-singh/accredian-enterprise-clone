@@ -1,9 +1,10 @@
 import { footer } from '@/lib/content/footer';
+import { Container } from '@/components/ui/Container';
 
 export default function Footer() {
   return (
     <footer className="border-t border-slate-100 bg-white py-12">
-      <div className="mx-auto max-w-6xl px-4">
+      <Container>
         <div className="flex flex-col justify-between gap-8 sm:flex-row">
           <div>
             <p className="text-xl font-extrabold text-brand-600">{footer.brand}</p>
@@ -29,7 +30,7 @@ export default function Footer() {
           </div>
         </div>
         <p className="mt-10 border-t border-slate-100 pt-6 text-xs text-slate-500">{footer.disclaimer}</p>
-      </div>
+      </Container>
     </footer>
   );
 }
