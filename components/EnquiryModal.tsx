@@ -1,6 +1,6 @@
-'use client';
+﻿'use client';
 
-import { FormEvent, ReactNode, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { domainOptions, deliveryModeOptions } from '@/lib/content/enquiryOptions';
 
 interface EnquiryModalProps {
@@ -22,6 +22,14 @@ const initialForm = {
 export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
   const [form, setForm] = useState(initialForm);
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success'>('idle');
+
+  // Reset form and status when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setForm(initialForm);
+      setStatus('idle');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -67,7 +75,7 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
 
         {status === 'success' ? (
           <div className="py-8 text-center">
-            <p className="text-lg font-semibold text-slate-900">Thanks — we've got it.</p>
+            <p className="text-lg font-semibold text-slate-900">Thanks — we’ve got it.</p>
             <p className="mt-2 text-sm text-slate-500">Our team will follow up within two business days.</p>
             <button
               type="button"
