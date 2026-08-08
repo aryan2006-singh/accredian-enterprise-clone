@@ -5,7 +5,7 @@ Full Stack Developer Intern assignment. Original copy, original "Ascentra" brand
 fictional partners/testimonials — not affiliated with Accredian.
 
 **Repository:** https://github.com/aryan2006-singh/accredian-enterprise-clone
-**Live demo:** _add your Render URL here after deploying_
+**Live demo:** https://accredian-enterprise-clone-cwz0.onrender.com
 
 ## Setup
 
@@ -54,26 +54,25 @@ keep the user's entered values.
 
 ## Deploying to Render
 
-A `render.yaml` Blueprint is committed at the repo root, so Render can configure
-the service automatically:
+Already deployed at https://accredian-enterprise-clone-cwz0.onrender.com (Web
+Service `srv-d9rrf449v7es73cu2rjg`, Node runtime, auto-deploys on every push
+to `feature/ascentra-landing-page`). It's running without Supabase
+credentials right now, so `/api/enquire` correctly validates input and then
+fails gracefully (500, "Something went wrong...") instead of persisting —
+the same behavior as running locally with no `.env.local`. To make the lead
+form actually save submissions:
 
-1. On the [Render dashboard](https://dashboard.render.com/), choose
-   **New → Blueprint** and connect this GitHub repository
-   (`aryan2006-singh/accredian-enterprise-clone`).
-2. Render reads `render.yaml` and proposes a Web Service named
-   `accredian-enterprise-clone` (Node runtime, `npm ci && npm run build` as the
-   build command, `npm run start` to run it, free plan).
-3. It will prompt for the two secrets the blueprint declares but doesn't set
-   (`sync: false`): fill in `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from
+1. Create a Supabase project and run `supabase/schema.sql` against it (see
+   "Setup" above).
+2. On the [Render dashboard](https://dashboard.render.com/) → this service →
+   **Environment**, add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from
    your Supabase project's Settings → API.
-4. Click **Apply**. First deploy takes a few minutes; Render assigns a
-   `https://<service-name>.onrender.com` URL and redeploys automatically on
-   every push to the connected branch.
-5. Update the "Live demo" link above with that URL once it's live.
+3. Render redeploys automatically when env vars change.
 
-If you'd rather not use the Blueprint, create a Web Service manually with the
-same build/start commands and environment variables — `render.yaml` is just a
-convenience, not a requirement.
+A `render.yaml` Blueprint is also committed at the repo root — useful if you
+ever want to spin up a fresh service (**New → Blueprint**, connect this repo,
+it reads the file and prompts for the same two secrets), but isn't required
+for the existing service above, which was created directly.
 
 **Note:** the free Render plan spins the service down after periods of
 inactivity, so the first request after a while may take ~30–60s to wake it
