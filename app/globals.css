@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Offsets anchor-scroll targets so the sticky Navbar doesn't cover the
+   top of the section being scrolled to. */
+section[id] {
+    scroll-margin-top: 96px;
+}
