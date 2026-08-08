@@ -10,7 +10,7 @@ export default function CtaBanner() {
       <div className="flex flex-col items-center justify-between gap-6 rounded-3xl bg-brand-600 px-6 py-10 text-center text-white sm:flex-row sm:px-10 sm:text-left">
         <div>
           <h2 className="text-2xl font-bold">Want to Learn More About Our Training Solutions?</h2>
-          <p className="mt-2 text-brand-100">Get expert guidance for your team’s success.</p>
+          <p className="mt-2 text-brand-50">Get expert guidance for your team’s success.</p>
         </div>
         <button
           type="button"

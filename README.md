@@ -8,38 +8,41 @@ fictional partners/testimonials — not affiliated with Accredian.
 
 ```bash
 npm install
+cp .env.example .env.local
 ```
+
+Then fill in `.env.local` with your own Supabase project's credentials:
+- `SUPABASE_URL` — your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` — your project's service-role key (Project
+  Settings → API). Server-side only — never exposed to the browser.
+
+Run `supabase/schema.sql` once against your Supabase project (SQL Editor,
+or `supabase db execute -f supabase/schema.sql`) to create the `enquiries`
+table before submitting the "Enquire Now" form.
 
 ## Development
 
 ```bash
 npm run dev      # start the dev server at http://localhost:3000
+npm test         # run the Vitest suite (lib/**/*.test.ts)
 npm run lint     # run eslint
 npm run build    # production build
 ```
 
 ## Project structure
 
-- `app/` — Next.js App Router pages
+- `app/` — Next.js App Router pages and the `/api/enquire` route handler
 - `components/sections/` — one presentational component per landing-page section
-- `components/Enquiry*.tsx` — the lead-capture modal UI and its shared context
+- `components/Enquiry*.tsx` — the lead-capture modal and its shared context
 - `lib/content/` — typed copy/data for each section
+- `lib/validation/` — the Zod schema for the enquiry form (shared by client and server)
+- `lib/supabase/` — the server-only Supabase client
+- `supabase/schema.sql` — DDL for the `enquiries` table
 
-## Backend (not included)
+## How the lead form works
 
-The "Enquire Now" form (`components/EnquiryModal.tsx`) currently validates
-input with native HTML attributes and simulates a successful submission
-locally — it does not call an API. To persist real leads, add:
-
-- A Zod validation schema for the form payload
-- A Supabase server client (using a service-role key, server-only)
-- A `POST /api/enquire` route handler that validates and inserts into a
-  Supabase table
-- The table's SQL schema (see the form fields in `EnquiryModal.tsx` for the
-  expected shape: name, email, phone, company, domain, candidatesCount,
-  deliveryMode, location)
-
-The exact `fetch` call to wire in is left as a `// TODO` comment in
-`EnquiryModal.tsx`'s submit handler. `.env.example` already lists the
-Supabase environment variables (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`)
-expected for this.
+`EnquiryModal.tsx` validates input client-side with the same Zod schema the
+server uses, `POST`s to `/api/enquire`, which re-validates and inserts into
+Supabase via the service-role client. Validation errors (400) are shown
+inline per field; server/network errors show a generic retry message and
+keep the user's entered values.

@@ -2,35 +2,55 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the full Ascentra enterprise-learning landing page (13 sections + a Supabase-backed "Enquire Now" lead form) into the existing Next.js scaffold, replacing the current placeholder `app/page.tsx`.
+**Goal:** Build the full Ascentra enterprise-learning landing page (13 sections + an "Enquire Now" lead-form UI) into the existing Next.js scaffold, replacing the current placeholder `app/page.tsx`.
 
-**Architecture:** Server Components for static sections reading from typed `lib/content/*` data files; a small client-side context (`EnquiryModalProvider`) shares one modal instance across the Navbar/Hero/CTA banner "Enquire Now" buttons; the modal posts to a Next.js Route Handler that validates with Zod and inserts into Supabase using a server-only service-role client.
+**Architecture:** Server Components for static sections reading from typed `lib/content/*` data files; a small client-side context (`EnquiryModalProvider`) shares one modal instance across the Navbar/Hero/CTA banner "Enquire Now" buttons. The modal is a self-contained UI with native HTML validation and a placeholder submit handler — no backend call.
 
-**Tech Stack:** Next.js 14 (App Router), TypeScript, Tailwind CSS, Zod, `@supabase/supabase-js`, Vitest.
+**Tech Stack:** Next.js 14 (App Router), TypeScript, Tailwind CSS.
+
+## Scope note (amended 2026-08-09, then reversed 2026-08-09)
+
+The backend for the lead form — Zod validation schema, Supabase server
+client, the `/api/enquire` route handler, and `supabase/schema.sql` — was
+originally ruled out of scope for this plan. **That was reversed the same
+day**: the user asked for the backend to be built after all. It was added
+directly, outside this task-by-task plan (all 15 tasks below were already
+complete): `lib/validation/enquiry.ts` (+ `lib/validation/enquiry.test.ts`),
+`lib/supabase/serverClient.ts`, `app/api/enquire/route.ts`, and
+`supabase/schema.sql`. `EnquiryModal.tsx`'s submit handler (Task 1, Step 2 —
+see below for its now-superseded original placeholder text) was rewired to
+call the real endpoint with field-level error handling. `vitest.config.ts`
+gained a `resolve.alias` for `@` so the new tests can import via the `@/*`
+alias, same as the app code does.
+
+The task text below (all still historically accurate for Tasks 1-15) should
+be read with this in mind: Task 1's brief describes and mandates a
+backend-free placeholder submit handler — that description no longer
+matches the code on disk.
 
 ## Global Constraints
 
 - Next.js 14 App Router conventions: Server Components by default; add `'use client'` only to files that use hooks, state, or context.
 - Styling uses Tailwind utility classes only, restricted to the existing `brand` color scale and `slate`/`white` neutrals already defined in `tailwind.config.ts` — no new colors.
-- No new npm dependencies beyond what's already in `package.json`.
+- No new npm dependencies. In particular: no `zod` usage and no `@supabase/supabase-js` usage anywhere in this plan's tasks (see Scope note above).
 - No real Accredian trademarks, real client logos, or real testimonials. Ascentra brand only; partner names and testimonials are fictional and disclosed as illustrative in the Footer.
 - No stock photography or external image/network fetches. Visuals are CSS/SVG only.
 - Import via the `@/*` path alias (maps to project root per `tsconfig.json`), e.g. `@/lib/...`, `@/components/...`.
-- Vitest scope stays `lib/**/*.test.ts` per the existing `vitest.config.ts` — no new test framework or config added.
-- No `.env.local` is created by this plan — Supabase credentials are the user's manual setup step (documented in the README added in Task 18).
+- No test framework changes. `vitest.config.ts`'s `lib/**/*.test.ts` scope stays as-is; this plan adds no test files since it adds no logic under `lib/` beyond static content data.
 
 ---
 
-### Task 1: Enquiry validation schema
+### Task 1: Enquiry modal + shared context (frontend-only)
 
 **Files:**
 - Create: `lib/content/enquiryOptions.ts`
-- Create: `lib/validation/enquiry.ts`
-- Test: `lib/validation/enquiry.test.ts`
+- Create: `components/EnquiryModalProvider.tsx`
+- Create: `components/EnquiryModal.tsx`
+- Modify: `app/globals.css` (add a reusable `.input` form-field style)
 
 **Interfaces:**
 - Produces: `domainOptions: readonly string[]`, `deliveryModeOptions: readonly string[]` (from `lib/content/enquiryOptions.ts`)
-- Produces: `enquirySchema: ZodObject`, `type EnquiryInput` (from `lib/validation/enquiry.ts`) — used by Task 3 (API route) and Task 4 (EnquiryModal)
+- Produces: `EnquiryModalProvider` component and `useEnquiryModal(): { open: () => void }` hook (from `@/components/EnquiryModalProvider`) — used by Task 2 (Navbar), Task 3 (Hero), Task 13 (CtaBanner), and Task 15 (root layout)
 
 - [ ] **Step 1: Create the option lists**
 
@@ -48,276 +68,7 @@ export const domainOptions = [
 export const deliveryModeOptions = ['Online', 'In-person', 'Hybrid'] as const;
 ```
 
-- [ ] **Step 2: Write the failing test**
-
-`lib/validation/enquiry.test.ts`:
-```ts
-import { describe, expect, it } from 'vitest';
-import { enquirySchema } from './enquiry';
-
-const validPayload = {
-  name: 'Jordan Lee',
-  email: 'jordan.lee@example.com',
-  phone: '+91 98765 43210',
-  company: 'Sample Enterprise Co.',
-  domain: 'Data Science',
-  candidatesCount: 25,
-  deliveryMode: 'Hybrid',
-  location: 'Gurugram, India',
-};
-
-describe('enquirySchema', () => {
-  it('accepts a fully valid payload', () => {
-    const result = enquirySchema.safeParse(validPayload);
-    expect(result.success).toBe(true);
-  });
-
-  it('accepts a payload without optional fields', () => {
-    const { candidatesCount, location, ...required } = validPayload;
-    const result = enquirySchema.safeParse(required);
-    expect(result.success).toBe(true);
-  });
-
-  it.each([
-    ['name', ''],
-    ['email', 'not-an-email'],
-    ['phone', 'abc'],
-    ['company', ''],
-    ['domain', 'Not A Real Domain'],
-    ['deliveryMode', 'By Carrier Pigeon'],
-  ])('rejects an invalid %s', (field, value) => {
-    const result = enquirySchema.safeParse({ ...validPayload, [field]: value });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects a non-positive candidatesCount', () => {
-    const result = enquirySchema.safeParse({ ...validPayload, candidatesCount: 0 });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects a non-integer candidatesCount', () => {
-    const result = enquirySchema.safeParse({ ...validPayload, candidatesCount: 2.5 });
-    expect(result.success).toBe(false);
-  });
-});
-```
-
-- [ ] **Step 3: Run the test to verify it fails**
-
-Run: `npx vitest run lib/validation/enquiry.test.ts`
-Expected: FAIL — `enquiry.ts` doesn't exist yet (module not found).
-
-- [ ] **Step 4: Implement the schema**
-
-`lib/validation/enquiry.ts`:
-```ts
-import { z } from 'zod';
-import { domainOptions, deliveryModeOptions } from '@/lib/content/enquiryOptions';
-
-export const enquirySchema = z.object({
-  name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
-  email: z.string().trim().email('Enter a valid email address'),
-  phone: z
-    .string()
-    .trim()
-    .regex(/^\+?[0-9\s-]{7,15}$/, 'Enter a valid phone number'),
-  company: z.string().trim().min(2, 'Company name must be at least 2 characters').max(150),
-  domain: z.enum(domainOptions, { errorMap: () => ({ message: 'Select a domain' }) }),
-  candidatesCount: z
-    .number({ invalid_type_error: 'Number of candidates must be a number' })
-    .int('Number of candidates must be a whole number')
-    .positive('Number of candidates must be greater than zero')
-    .finite('Number of candidates must be a valid number')
-    .optional(),
-  deliveryMode: z.enum(deliveryModeOptions, {
-    errorMap: () => ({ message: 'Select a delivery mode' }),
-  }),
-  location: z.string().trim().max(150).optional(),
-});
-
-export type EnquiryInput = z.infer<typeof enquirySchema>;
-```
-
-- [ ] **Step 5: Run the test to verify it passes**
-
-Run: `npx vitest run lib/validation/enquiry.test.ts`
-Expected: PASS (10 assertions across the listed cases).
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add lib/content/enquiryOptions.ts lib/validation/enquiry.ts lib/validation/enquiry.test.ts
-git commit -m "feat: add enquiry validation schema"
-```
-
----
-
-### Task 2: Supabase server client + schema
-
-**Files:**
-- Create: `lib/supabase/serverClient.ts`
-- Create: `supabase/schema.sql`
-
-**Interfaces:**
-- Produces: `getSupabaseServerClient(): SupabaseClient` (from `lib/supabase/serverClient.ts`) — used by Task 3 (API route)
-
-- [ ] **Step 1: Write the server-only Supabase client**
-
-`lib/supabase/serverClient.ts`:
-```ts
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-
-let client: SupabaseClient | null = null;
-
-export function getSupabaseServerClient(): SupabaseClient {
-  if (typeof window !== 'undefined') {
-    throw new Error('getSupabaseServerClient must only be called on the server.');
-  }
-  if (client) return client;
-
-  const url = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey) {
-    throw new Error(
-      'Supabase server client is not configured: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.'
-    );
-  }
-
-  client = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
-  return client;
-}
-```
-
-- [ ] **Step 2: Write the table schema**
-
-`supabase/schema.sql`:
-```sql
--- Run this once against your Supabase project (SQL Editor or `supabase db execute`).
-
-create extension if not exists pgcrypto;
-
-create table if not exists enquiries (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  email text not null,
-  phone text not null,
-  company text not null,
-  domain text not null,
-  candidates_count integer,
-  delivery_mode text not null,
-  location text,
-  created_at timestamptz not null default now()
-);
-
--- Row Level Security is enabled with no policies, so the anon/authenticated
--- API roles have zero access to this table. Only the server-side
--- service-role key (used in lib/supabase/serverClient.ts) can read/write it.
-alter table enquiries enable row level security;
-```
-
-- [ ] **Step 3: Type-check**
-
-Run: `npx tsc --noEmit`
-Expected: no errors.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add lib/supabase/serverClient.ts supabase/schema.sql
-git commit -m "feat: add Supabase server client and enquiries table schema"
-```
-
----
-
-### Task 3: Enquire API route
-
-**Files:**
-- Create: `app/api/enquire/route.ts`
-
-**Interfaces:**
-- Consumes: `enquirySchema` from `@/lib/validation/enquiry` (Task 1); `getSupabaseServerClient()` from `@/lib/supabase/serverClient` (Task 2)
-- Produces: `POST /api/enquire` — `201 { id: string }` on success, `400 { error, fieldErrors }` on validation failure, `500 { error }` on server/database failure. Consumed by Task 4 (EnquiryModal).
-
-- [ ] **Step 1: Implement the route handler**
-
-`app/api/enquire/route.ts`:
-```ts
-import { NextResponse } from 'next/server';
-import { enquirySchema } from '@/lib/validation/enquiry';
-import { getSupabaseServerClient } from '@/lib/supabase/serverClient';
-
-export async function POST(request: Request) {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Request body must be valid JSON.' }, { status: 400 });
-  }
-
-  const parsed = enquirySchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Validation failed.', fieldErrors: parsed.error.flatten().fieldErrors },
-      { status: 400 }
-    );
-  }
-
-  try {
-    const supabase = getSupabaseServerClient();
-    const { data, error } = await supabase
-      .from('enquiries')
-      .insert({
-        name: parsed.data.name,
-        email: parsed.data.email,
-        phone: parsed.data.phone,
-        company: parsed.data.company,
-        domain: parsed.data.domain,
-        candidates_count: parsed.data.candidatesCount ?? null,
-        delivery_mode: parsed.data.deliveryMode,
-        location: parsed.data.location ?? null,
-      })
-      .select('id')
-      .single();
-
-    if (error) throw error;
-
-    return NextResponse.json({ id: data.id }, { status: 201 });
-  } catch (err) {
-    console.error('Failed to save enquiry:', err);
-    return NextResponse.json(
-      { error: 'Something went wrong while saving your enquiry. Please try again shortly.' },
-      { status: 500 }
-    );
-  }
-}
-```
-
-- [ ] **Step 2: Type-check**
-
-Run: `npx tsc --noEmit`
-Expected: no errors.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add app/api/enquire/route.ts
-git commit -m "feat: add /api/enquire route handler"
-```
-
----
-
-### Task 4: Enquiry modal + shared context
-
-**Files:**
-- Create: `components/EnquiryModalProvider.tsx`
-- Create: `components/EnquiryModal.tsx`
-- Modify: `app/globals.css` (add a reusable `.input` form-field style)
-
-**Interfaces:**
-- Consumes: `enquirySchema` from `@/lib/validation/enquiry` (Task 1); `domainOptions`, `deliveryModeOptions` from `@/lib/content/enquiryOptions` (Task 1); `POST /api/enquire` (Task 3)
-- Produces: `EnquiryModalProvider` component and `useEnquiryModal(): { open: () => void }` hook (from `@/components/EnquiryModalProvider`) — used by Task 5 (Navbar), Task 6 (Hero), Task 16 (CtaBanner), and Task 18 (root layout)
-
-- [ ] **Step 1: Add the shared input style**
+- [ ] **Step 2: Add the shared input style**
 
 Append to `app/globals.css`:
 ```css
@@ -329,32 +80,23 @@ Append to `app/globals.css`:
 }
 ```
 
-- [ ] **Step 2: Create the modal component**
+- [ ] **Step 3: Create the modal component**
 
-`components/EnquiryModal.tsx`:
+`components/EnquiryModal.tsx`. Validation is native-HTML only (`required`,
+`type="email"`, `pattern`, `min`) — no Zod. The submit handler does not call
+any API; it simulates a success state locally so the UI is complete on its
+own, with a `// TODO` comment marking where a real submission call belongs:
+
 ```tsx
 'use client';
 
 import { FormEvent, ReactNode, useState } from 'react';
-import { enquirySchema } from '@/lib/validation/enquiry';
 import { domainOptions, deliveryModeOptions } from '@/lib/content/enquiryOptions';
 
 interface EnquiryModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-type FieldKey =
-  | 'name'
-  | 'email'
-  | 'phone'
-  | 'company'
-  | 'domain'
-  | 'candidatesCount'
-  | 'deliveryMode'
-  | 'location';
-
-type FieldErrors = Partial<Record<FieldKey, string>>;
 
 const initialForm = {
   name: '',
@@ -369,9 +111,7 @@ const initialForm = {
 
 export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
   const [form, setForm] = useState(initialForm);
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success'>('idle');
 
   if (!isOpen) return null;
 
@@ -379,63 +119,25 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setFieldErrors({});
-    setErrorMessage('');
 
-    const payload = {
-      name: form.name,
-      email: form.email,
-      phone: form.phone,
-      company: form.company,
-      domain: form.domain,
-      candidatesCount: form.candidatesCount ? Number(form.candidatesCount) : undefined,
-      deliveryMode: form.deliveryMode,
-      location: form.location || undefined,
-    };
-
-    const parsed = enquirySchema.safeParse(payload);
-    if (!parsed.success) {
-      const flat = parsed.error.flatten().fieldErrors;
-      const nextErrors: FieldErrors = {};
-      (Object.keys(flat) as FieldKey[]).forEach((key) => {
-        const message = flat[key]?.[0];
-        if (message) nextErrors[key] = message;
-      });
-      setFieldErrors(nextErrors);
-      return;
-    }
-
+    // Native HTML validation (required/type/pattern/min on the fields below)
+    // already blocks submission with invalid data before this handler runs.
     setStatus('submitting');
-    try {
-      const response = await fetch('/api/enquire', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(parsed.data),
-      });
 
-      if (!response.ok) {
-        const responseBody = await response.json().catch(() => ({}));
-        if (response.status === 400 && responseBody.fieldErrors) {
-          const nextErrors: FieldErrors = {};
-          Object.keys(responseBody.fieldErrors).forEach((key) => {
-            const message = responseBody.fieldErrors[key]?.[0];
-            if (message) nextErrors[key as FieldKey] = message;
-          });
-          setFieldErrors(nextErrors);
-          setStatus('idle');
-          return;
-        }
-        throw new Error(responseBody.error || 'Something went wrong. Please try again.');
-      }
-
-      setStatus('success');
-      setForm(initialForm);
-    } catch (err) {
-      setStatus('error');
-      setErrorMessage(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
-    }
+    // TODO(backend owner): replace this block with a real submission, e.g.:
+    //   const response = await fetch('/api/enquire', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({
+    //       ...form,
+    //       candidatesCount: form.candidatesCount ? Number(form.candidatesCount) : undefined,
+    //     }),
+    //   });
+    //   if (!response.ok) { setStatus('idle'); return; }
+    setStatus('success');
+    setForm(initialForm);
   }
 
   return (
@@ -466,43 +168,52 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
             </button>
           </div>
         ) : (
-          <form className="space-y-4" onSubmit={handleSubmit} noValidate>
-            <Field label="Name" error={fieldErrors.name}>
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <Field label="Name">
               <input
                 className="input"
+                required
+                minLength={2}
                 value={form.name}
                 onChange={(e) => updateField('name', e.target.value)}
                 placeholder="Enter name"
               />
             </Field>
-            <Field label="Email" error={fieldErrors.email}>
+            <Field label="Email">
               <input
                 className="input"
                 type="email"
+                required
                 value={form.email}
                 onChange={(e) => updateField('email', e.target.value)}
                 placeholder="Enter email"
               />
             </Field>
-            <Field label="Phone" error={fieldErrors.phone}>
+            <Field label="Phone">
               <input
                 className="input"
+                required
+                pattern="^\+?[0-9\s-]{7,15}$"
+                title="Enter a valid phone number"
                 value={form.phone}
                 onChange={(e) => updateField('phone', e.target.value)}
                 placeholder="+91 98765 43210"
               />
             </Field>
-            <Field label="Company name" error={fieldErrors.company}>
+            <Field label="Company name">
               <input
                 className="input"
+                required
+                minLength={2}
                 value={form.company}
                 onChange={(e) => updateField('company', e.target.value)}
                 placeholder="Enter company name"
               />
             </Field>
-            <Field label="Domain" error={fieldErrors.domain}>
+            <Field label="Domain">
               <select
                 className="input"
+                required
                 value={form.domain}
                 onChange={(e) => updateField('domain', e.target.value)}
               >
@@ -516,7 +227,7 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 ))}
               </select>
             </Field>
-            <Field label="Number of candidates" error={fieldErrors.candidatesCount}>
+            <Field label="Number of candidates">
               <input
                 className="input"
                 type="number"
@@ -526,9 +237,10 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 placeholder="Enter number of candidates"
               />
             </Field>
-            <Field label="Mode of delivery" error={fieldErrors.deliveryMode}>
+            <Field label="Mode of delivery">
               <select
                 className="input"
+                required
                 value={form.deliveryMode}
                 onChange={(e) => updateField('deliveryMode', e.target.value)}
               >
@@ -542,7 +254,7 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 ))}
               </select>
             </Field>
-            <Field label="Location" error={fieldErrors.location}>
+            <Field label="Location">
               <input
                 className="input"
                 value={form.location}
@@ -550,8 +262,6 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 placeholder="Eg: Gurugram, Delhi, India"
               />
             </Field>
-
-            {status === 'error' && <p className="text-sm text-red-600">{errorMessage}</p>}
 
             <button
               type="submit"
@@ -567,18 +277,17 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
   );
 }
 
-function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block font-medium text-slate-700">{label}</span>
       {children}
-      {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
     </label>
   );
 }
 ```
 
-- [ ] **Step 3: Create the provider/context**
+- [ ] **Step 4: Create the provider/context**
 
 `components/EnquiryModalProvider.tsx`:
 ```tsx
@@ -617,29 +326,29 @@ export function useEnquiryModal() {
 }
 ```
 
-- [ ] **Step 4: Type-check**
+- [ ] **Step 5: Type-check**
 
 Run: `npx tsc --noEmit`
-Expected: no errors. (`EnquiryModalProvider` isn't wired into the app yet — that's Task 18 — so nothing renders it yet; that's expected at this point.)
+Expected: no errors. (`EnquiryModalProvider` isn't wired into the app yet — that's Task 15 — so nothing renders it yet; that's expected at this point.)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add components/EnquiryModal.tsx components/EnquiryModalProvider.tsx app/globals.css
-git commit -m "feat: add Enquiry modal and shared modal context"
+git add lib/content/enquiryOptions.ts components/EnquiryModal.tsx components/EnquiryModalProvider.tsx app/globals.css
+git commit -m "feat: add Enquiry modal UI and shared modal context"
 ```
 
 ---
 
-### Task 5: Navbar section
+### Task 2: Navbar section
 
 **Files:**
 - Create: `lib/content/nav.ts`
 - Create: `components/sections/Navbar.tsx`
 
 **Interfaces:**
-- Consumes: `useEnquiryModal()` from `@/components/EnquiryModalProvider` (Task 4)
-- Produces: default-exported `Navbar` component — used by Task 18 (page composition)
+- Consumes: `useEnquiryModal()` from `@/components/EnquiryModalProvider` (Task 1)
+- Produces: default-exported `Navbar` component — used by Task 15 (page composition)
 
 - [ ] **Step 1: Create the nav link data**
 
@@ -715,15 +424,15 @@ git commit -m "feat: add Navbar section"
 
 ---
 
-### Task 6: Hero section
+### Task 3: Hero section
 
 **Files:**
 - Create: `lib/content/hero.ts`
 - Create: `components/sections/Hero.tsx`
 
 **Interfaces:**
-- Consumes: `useEnquiryModal()` from `@/components/EnquiryModalProvider` (Task 4)
-- Produces: default-exported `Hero` component with `id="home"` root section — used by Task 18
+- Consumes: `useEnquiryModal()` from `@/components/EnquiryModalProvider` (Task 1)
+- Produces: default-exported `Hero` component with `id="home"` root section — used by Task 15
 
 - [ ] **Step 1: Create the hero copy**
 
@@ -807,14 +516,14 @@ git commit -m "feat: add Hero section"
 
 ---
 
-### Task 7: Stats section
+### Task 4: Stats section
 
 **Files:**
 - Create: `lib/content/stats.ts`
 - Create: `components/sections/Stats.tsx`
 
 **Interfaces:**
-- Produces: default-exported `Stats` component with `id="stats"` root section — used by Task 18
+- Produces: default-exported `Stats` component with `id="stats"` root section — used by Task 15
 
 - [ ] **Step 1: Create the stats data**
 
@@ -872,14 +581,14 @@ git commit -m "feat: add Stats section"
 
 ---
 
-### Task 8: Trust strip section
+### Task 5: Trust strip section
 
 **Files:**
 - Create: `lib/content/partners.ts`
 - Create: `components/sections/TrustStrip.tsx`
 
 **Interfaces:**
-- Produces: default-exported `TrustStrip` component with `id="partners"` root section — used by Task 18
+- Produces: default-exported `TrustStrip` component with `id="partners"` root section — used by Task 15
 
 - [ ] **Step 1: Create the partner list (fictional companies)**
 
@@ -934,14 +643,14 @@ git commit -m "feat: add TrustStrip section"
 
 ---
 
-### Task 9: Edge highlights section
+### Task 6: Edge highlights section
 
 **Files:**
 - Create: `lib/content/edge.ts`
 - Create: `components/sections/EdgeHighlights.tsx`
 
 **Interfaces:**
-- Produces: default-exported `EdgeHighlights` component — used by Task 18
+- Produces: default-exported `EdgeHighlights` component — used by Task 15
 
 - [ ] **Step 1: Create the differentiator data**
 
@@ -1012,14 +721,14 @@ git commit -m "feat: add EdgeHighlights section"
 
 ---
 
-### Task 10: Domain expertise section
+### Task 7: Domain expertise section
 
 **Files:**
 - Create: `lib/content/programs.ts`
 - Create: `components/sections/DomainExpertise.tsx`
 
 **Interfaces:**
-- Produces: default-exported `DomainExpertise` component with `id="programs"` root section — used by Task 18
+- Produces: default-exported `DomainExpertise` component with `id="programs"` root section — used by Task 15
 
 - [ ] **Step 1: Create the program data**
 
@@ -1082,14 +791,14 @@ git commit -m "feat: add DomainExpertise section"
 
 ---
 
-### Task 11: Course segmentation section
+### Task 8: Course segmentation section
 
 **Files:**
 - Create: `lib/content/segmentation.ts`
 - Create: `components/sections/CourseSegmentation.tsx`
 
 **Interfaces:**
-- Produces: default-exported `CourseSegmentation` component — used by Task 18
+- Produces: default-exported `CourseSegmentation` component — used by Task 15
 
 - [ ] **Step 1: Create the segmentation data**
 
@@ -1148,14 +857,14 @@ git commit -m "feat: add CourseSegmentation section"
 
 ---
 
-### Task 12: Who should join section
+### Task 9: Who should join section
 
 **Files:**
 - Create: `lib/content/audiences.ts`
 - Create: `components/sections/WhoShouldJoin.tsx`
 
 **Interfaces:**
-- Produces: default-exported `WhoShouldJoin` component — used by Task 18
+- Produces: default-exported `WhoShouldJoin` component — used by Task 15
 
 - [ ] **Step 1: Create the audience data**
 
@@ -1214,14 +923,14 @@ git commit -m "feat: add WhoShouldJoin section"
 
 ---
 
-### Task 13: Framework section
+### Task 10: Framework section
 
 **Files:**
 - Create: `lib/content/framework.ts`
 - Create: `components/sections/Framework.tsx`
 
 **Interfaces:**
-- Produces: default-exported `Framework` component with `id="framework"` root section — used by Task 18
+- Produces: default-exported `Framework` component with `id="framework"` root section — used by Task 15
 
 - [ ] **Step 1: Create the framework step data**
 
@@ -1285,14 +994,14 @@ git commit -m "feat: add Framework section"
 
 ---
 
-### Task 14: FAQ section
+### Task 11: FAQ section
 
 **Files:**
 - Create: `lib/content/faqs.ts`
 - Create: `components/sections/Faq.tsx`
 
 **Interfaces:**
-- Produces: default-exported `Faq` component with `id="faqs"` root section — used by Task 18
+- Produces: default-exported `Faq` component with `id="faqs"` root section — used by Task 15
 
 - [ ] **Step 1: Create the FAQ data**
 
@@ -1433,14 +1142,14 @@ git commit -m "feat: add FAQ section"
 
 ---
 
-### Task 15: Testimonials section
+### Task 12: Testimonials section
 
 **Files:**
 - Create: `lib/content/testimonials.ts`
 - Create: `components/sections/Testimonials.tsx`
 
 **Interfaces:**
-- Produces: default-exported `Testimonials` component with `id="testimonials"` root section — used by Task 18
+- Produces: default-exported `Testimonials` component with `id="testimonials"` root section — used by Task 15
 
 - [ ] **Step 1: Create the testimonial data (fictional attributions)**
 
@@ -1514,14 +1223,14 @@ git commit -m "feat: add Testimonials section"
 
 ---
 
-### Task 16: CTA banner section
+### Task 13: CTA banner section
 
 **Files:**
 - Create: `components/sections/CtaBanner.tsx`
 
 **Interfaces:**
-- Consumes: `useEnquiryModal()` from `@/components/EnquiryModalProvider` (Task 4)
-- Produces: default-exported `CtaBanner` component — used by Task 18
+- Consumes: `useEnquiryModal()` from `@/components/EnquiryModalProvider` (Task 1)
+- Produces: default-exported `CtaBanner` component — used by Task 15
 
 - [ ] **Step 1: Create the CtaBanner component**
 
@@ -1568,14 +1277,14 @@ git commit -m "feat: add CtaBanner section"
 
 ---
 
-### Task 17: Footer section
+### Task 14: Footer section
 
 **Files:**
 - Create: `lib/content/footer.ts`
 - Create: `components/sections/Footer.tsx`
 
 **Interfaces:**
-- Produces: default-exported `Footer` component — used by Task 18
+- Produces: default-exported `Footer` component — used by Task 15
 
 - [ ] **Step 1: Create the footer data**
 
@@ -1650,7 +1359,7 @@ git commit -m "feat: add Footer section"
 
 ---
 
-### Task 18: Wire up the page, root layout, and README
+### Task 15: Wire up the page, root layout, and README
 
 **Files:**
 - Modify: `app/page.tsx`
@@ -1658,7 +1367,7 @@ git commit -m "feat: add Footer section"
 - Create: `README.md`
 
 **Interfaces:**
-- Consumes: every section component from Tasks 5–17; `EnquiryModalProvider` from Task 4
+- Consumes: every section component from Tasks 2–14; `EnquiryModalProvider` from Task 1
 
 - [ ] **Step 1: Compose the sections in `app/page.tsx`**
 
@@ -1740,33 +1449,41 @@ fictional partners/testimonials — not affiliated with Accredian.
 
 ```bash
 npm install
-cp .env.example .env.local
 ```
-
-Then fill in `.env.local`:
-- `SUPABASE_URL` — your Supabase project URL
-- `SUPABASE_SERVICE_ROLE_KEY` — your Supabase project's service-role key (server-side only, never exposed to the browser)
-
-Run `supabase/schema.sql` once against your Supabase project (SQL Editor, or `supabase db execute -f supabase/schema.sql`) to create the `enquiries` table before submitting the Enquire Now form.
 
 ## Development
 
 ```bash
 npm run dev      # start the dev server at http://localhost:3000
-npm test         # run the Vitest suite (lib/**/*.test.ts)
 npm run lint     # run eslint
 npm run build    # production build
 ```
 
 ## Project structure
 
-- `app/` — Next.js App Router pages and the `/api/enquire` route handler
+- `app/` — Next.js App Router pages
 - `components/sections/` — one presentational component per landing-page section
-- `components/Enquiry*.tsx` — the lead-capture modal and its shared context
+- `components/Enquiry*.tsx` — the lead-capture modal UI and its shared context
 - `lib/content/` — typed copy/data for each section
-- `lib/validation/` — the Zod schema for the enquiry form (shared by client and server)
-- `lib/supabase/` — the server-only Supabase client
-- `supabase/schema.sql` — DDL for the `enquiries` table
+
+## Backend (not included)
+
+The "Enquire Now" form (`components/EnquiryModal.tsx`) currently validates
+input with native HTML attributes and simulates a successful submission
+locally — it does not call an API. To persist real leads, add:
+
+- A Zod validation schema for the form payload
+- A Supabase server client (using a service-role key, server-only)
+- A `POST /api/enquire` route handler that validates and inserts into a
+  Supabase table
+- The table's SQL schema (see the form fields in `EnquiryModal.tsx` for the
+  expected shape: name, email, phone, company, domain, candidatesCount,
+  deliveryMode, location)
+
+The exact `fetch` call to wire in is left as a `// TODO` comment in
+`EnquiryModal.tsx`'s submit handler. `.env.example` already lists the
+Supabase environment variables (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`)
+expected for this.
 ```
 
 - [ ] **Step 4: Full verification**
@@ -1775,10 +1492,9 @@ Run, in order:
 ```bash
 npx tsc --noEmit
 npm run lint
-npx vitest run
 npm run build
 ```
-Expected: all four commands exit with status 0 — no type errors, no lint errors, all Vitest tests pass, and the production build succeeds.
+Expected: all three commands exit with status 0 — no type errors, no lint errors, and the production build succeeds.
 
 - [ ] **Step 5: Manual smoke check**
 
@@ -1786,8 +1502,8 @@ Run: `npm run dev`, open `http://localhost:3000`, and confirm:
 - All 13 sections render in order with no console errors.
 - Each Navbar link scrolls to the matching section (anchors: `#home`, `#stats`, `#partners`, `#programs`, `#framework`, `#faqs`, `#testimonials`).
 - Clicking "Enquire Now" (Navbar, Hero, or CTA banner) opens the same modal.
-- Submitting the form with empty fields shows inline field errors and does not submit.
-- Submitting a valid form without `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` configured shows the generic error message from the API route (expected until the user completes their manual Supabase setup).
+- Submitting the form with empty required fields is blocked by native browser validation (no submission).
+- Submitting a fully valid form shows the local success state (no network call is made — open DevTools Network tab and confirm nothing hits `/api/enquire`).
 Stop the dev server (Ctrl+C) when done.
 
 - [ ] **Step 6: Commit**

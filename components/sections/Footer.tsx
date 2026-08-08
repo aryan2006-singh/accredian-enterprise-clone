@@ -28,7 +28,7 @@ export default function Footer() {
             </div>
           </div>
         </div>
-        <p className="mt-10 border-t border-slate-100 pt-6 text-xs text-slate-400">{footer.disclaimer}</p>
+        <p className="mt-10 border-t border-slate-100 pt-6 text-xs text-slate-500">{footer.disclaimer}</p>
       </div>
     </footer>
   );

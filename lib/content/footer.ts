@@ -8,5 +8,5 @@ export const footer = {
   ],
   contactEmail: 'hello@ascentra.example',
   disclaimer:
-    "Ascentra is an original, independent project built as a Full Stack Developer Intern assignment. It is a partial clone inspired by Accredian's enterprise page and is not affiliated with or endorsed by Accredian. Partner names and testimonials shown are illustrative placeholders.",
+    "Ascentra is an original, independent project built as a Full Stack Developer Intern assignment. It is a partial clone inspired by Accredian's enterprise page and is not affiliated with or endorsed by Accredian. Partner names, statistics, and testimonials shown are illustrative placeholders.",
 };

@@ -195,3 +195,38 @@ User fills EnquiryModal
 - Auth, admin dashboard for viewing leads, email notifications.
 - Stock photography, external icon packs, analytics/tracking scripts.
 - Pixel-perfect visual match to enterprise.accredian.com.
+
+## Amendment (2026-08-09): backend moved to user-owned scope
+
+After this spec was approved, the user decided to implement the backend
+themselves rather than have it built as part of this plan. This changes the
+"Lead-capture form" and "Manual steps" sections above as follows:
+
+- **Dropped from this plan's scope:** `lib/validation/enquiry.ts` (Zod
+  schema), `lib/supabase/serverClient.ts`, `app/api/enquire/route.ts`, and
+  `supabase/schema.sql`. The user will design and implement all four
+  themselves, in whatever shape they choose — the field list below is a
+  reference, not a contract this plan enforces.
+- **Still in this plan's scope:** the `EnquiryModal` UI — all form fields,
+  basic client-side validation via native HTML attributes (`required`,
+  `type="email"`, `pattern`, `min`), and a submit handler that is a clearly
+  marked placeholder (no `fetch` call, no Zod dependency). It simulates a
+  success state locally so the UI is demonstrably complete, with a code
+  comment marking exactly where a real `POST /api/enquire` call would go.
+- The form's field set is unchanged: Name, Email, Phone, Company, Domain
+  (select), Number of candidates, Delivery mode (select), Location.
+- "Manual steps" (previously just running `supabase/schema.sql`) now
+  additionally includes building the entire backend: the Zod schema, the
+  Supabase server client, the API route, and the SQL schema.
+
+## Second amendment (2026-08-09): backend built after all
+
+The user reversed the above decision the same day and asked for the full
+backend to be built after all. `lib/validation/enquiry.ts` (+ Vitest
+coverage), `lib/supabase/serverClient.ts`, `app/api/enquire/route.ts`, and
+`supabase/schema.sql` were all added, and `EnquiryModal.tsx`'s submit
+handler now calls the real endpoint with client + server Zod validation and
+inline field-error display. The only manual step left for the user is
+account-specific and cannot be done on their behalf: creating their own
+Supabase project and populating `.env.local` with its URL and service-role
+key.

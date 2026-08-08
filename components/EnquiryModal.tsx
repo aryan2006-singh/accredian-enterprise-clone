@@ -1,12 +1,25 @@
-﻿'use client';
+'use client';
 
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
+import { enquirySchema } from '@/lib/validation/enquiry';
 import { domainOptions, deliveryModeOptions } from '@/lib/content/enquiryOptions';
 
 interface EnquiryModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+type FieldKey =
+  | 'name'
+  | 'email'
+  | 'phone'
+  | 'company'
+  | 'domain'
+  | 'candidatesCount'
+  | 'deliveryMode'
+  | 'location';
+
+type FieldErrors = Partial<Record<FieldKey, string>>;
 
 const initialForm = {
   name: '',
@@ -19,16 +32,33 @@ const initialForm = {
   location: '',
 };
 
+const TITLE_ID = 'enquiry-modal-title';
+
 export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
   const [form, setForm] = useState(initialForm);
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'success'>('idle');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // Reset form and status when modal opens
+  // Reset the form and close, so the next open always starts fresh — resetting
+  // here (rather than in an effect keyed on `isOpen`) avoids a one-frame flash
+  // of stale state, since the reset happens before the close is even requested.
+  function handleClose() {
+    setForm(initialForm);
+    setFieldErrors({});
+    setErrorMessage('');
+    setStatus('idle');
+    onClose();
+  }
+
   useEffect(() => {
-    if (isOpen) {
-      setForm(initialForm);
-      setStatus('idle');
+    if (!isOpen) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') handleClose();
     }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -39,33 +69,85 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setFieldErrors({});
+    setErrorMessage('');
 
     // Native HTML validation (required/type/pattern/min on the fields below)
     // already blocks submission with invalid data before this handler runs.
-    setStatus('submitting');
+    const payload = {
+      name: form.name,
+      email: form.email,
+      phone: form.phone,
+      company: form.company,
+      domain: form.domain,
+      candidatesCount: form.candidatesCount ? Number(form.candidatesCount) : undefined,
+      deliveryMode: form.deliveryMode,
+      location: form.location || undefined,
+    };
 
-    // TODO(backend owner): replace this block with a real submission, e.g.:
-    //   const response = await fetch('/api/enquire', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({
-    //       ...form,
-    //       candidatesCount: form.candidatesCount ? Number(form.candidatesCount) : undefined,
-    //     }),
-    //   });
-    //   if (!response.ok) { setStatus('idle'); return; }
-    setStatus('success');
-    setForm(initialForm);
+    const parsed = enquirySchema.safeParse(payload);
+    if (!parsed.success) {
+      const flat = parsed.error.flatten().fieldErrors;
+      const nextErrors: FieldErrors = {};
+      (Object.keys(flat) as FieldKey[]).forEach((key) => {
+        const message = flat[key]?.[0];
+        if (message) nextErrors[key] = message;
+      });
+      setFieldErrors(nextErrors);
+      return;
+    }
+
+    setStatus('submitting');
+    try {
+      const response = await fetch('/api/enquire', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsed.data),
+      });
+
+      if (!response.ok) {
+        const responseBody = await response.json().catch(() => ({}));
+        if (response.status === 400 && responseBody.fieldErrors) {
+          const nextErrors: FieldErrors = {};
+          Object.keys(responseBody.fieldErrors).forEach((key) => {
+            const message = responseBody.fieldErrors[key]?.[0];
+            if (message) nextErrors[key as FieldKey] = message;
+          });
+          setFieldErrors(nextErrors);
+          setStatus('idle');
+          return;
+        }
+        throw new Error(responseBody.error || 'Something went wrong. Please try again.');
+      }
+
+      setStatus('success');
+      setForm(initialForm);
+    } catch (err) {
+      setStatus('error');
+      setErrorMessage(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={TITLE_ID}
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+      >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-900">Enquire Now</h2>
+          <h2 id={TITLE_ID} className="text-xl font-bold text-slate-900">
+            Enquire Now
+          </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close enquiry form"
             className="text-2xl leading-none text-slate-400 hover:text-slate-600"
           >
@@ -74,20 +156,20 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
         </div>
 
         {status === 'success' ? (
-          <div className="py-8 text-center">
+          <div className="py-8 text-center" aria-live="polite">
             <p className="text-lg font-semibold text-slate-900">Thanks — we’ve got it.</p>
             <p className="mt-2 text-sm text-slate-500">Our team will follow up within two business days.</p>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="mt-6 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
             >
               Close
             </button>
           </div>
         ) : (
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <Field label="Name">
+          <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+            <Field label="Name" error={fieldErrors.name}>
               <input
                 className="input"
                 required
@@ -97,7 +179,7 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 placeholder="Enter name"
               />
             </Field>
-            <Field label="Email">
+            <Field label="Email" error={fieldErrors.email}>
               <input
                 className="input"
                 type="email"
@@ -107,7 +189,7 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 placeholder="Enter email"
               />
             </Field>
-            <Field label="Phone">
+            <Field label="Phone" error={fieldErrors.phone}>
               <input
                 className="input"
                 required
@@ -118,7 +200,7 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 placeholder="+91 98765 43210"
               />
             </Field>
-            <Field label="Company name">
+            <Field label="Company name" error={fieldErrors.company}>
               <input
                 className="input"
                 required
@@ -128,7 +210,7 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 placeholder="Enter company name"
               />
             </Field>
-            <Field label="Domain">
+            <Field label="Domain" error={fieldErrors.domain}>
               <select
                 className="input"
                 required
@@ -145,7 +227,7 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 ))}
               </select>
             </Field>
-            <Field label="Number of candidates">
+            <Field label="Number of candidates" error={fieldErrors.candidatesCount}>
               <input
                 className="input"
                 type="number"
@@ -155,7 +237,7 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 placeholder="Enter number of candidates"
               />
             </Field>
-            <Field label="Mode of delivery">
+            <Field label="Mode of delivery" error={fieldErrors.deliveryMode}>
               <select
                 className="input"
                 required
@@ -172,7 +254,7 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 ))}
               </select>
             </Field>
-            <Field label="Location">
+            <Field label="Location" error={fieldErrors.location}>
               <input
                 className="input"
                 value={form.location}
@@ -180,6 +262,8 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
                 placeholder="Eg: Gurugram, Delhi, India"
               />
             </Field>
+
+            {status === 'error' && <p className="text-sm text-red-600">{errorMessage}</p>}
 
             <button
               type="submit"
@@ -195,11 +279,20 @@ export default function EnquiryModal({ isOpen, onClose }: EnquiryModalProps) {
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: ReactNode;
+}) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block font-medium text-slate-700">{label}</span>
       {children}
+      {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
     </label>
   );
 }
