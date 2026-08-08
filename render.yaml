@@ -3,6 +3,7 @@ services:
     name: accredian-enterprise-clone
     runtime: node
     plan: free
+    repo: https://github.com/aryan2006-singh/accredian-enterprise-clone
     branch: feature/ascentra-landing-page
     buildCommand: npm ci && npm run build
     startCommand: npm run start
