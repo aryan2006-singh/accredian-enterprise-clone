@@ -56,7 +56,7 @@ keep the user's entered values.
 
 Already deployed at https://accredian-enterprise-clone-cwz0.onrender.com (Web
 Service `srv-d9rrf449v7es73cu2rjg`, Node runtime, auto-deploys on every push
-to `feature/ascentra-landing-page`). It's running without Supabase
+to `main`). It's running without Supabase
 credentials right now, so `/api/enquire` correctly validates input and then
 fails gracefully (500, "Something went wrong...") instead of persisting —
 the same behavior as running locally with no `.env.local`. To make the lead
